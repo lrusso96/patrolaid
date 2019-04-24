@@ -39,7 +39,7 @@ class Patroller:
         """
         logging.info('initializing authentication...')
         data = {'action': 'query', 'assert': 'user'}
-        r = self.__post__(**data)
+        r = self.__mw_post__(**data)
         error = r.json().get('error')
         if error:
             logging.error('%s: %s\n%s', error.get('code'), error.get('info'), error.get('*'))
@@ -48,7 +48,7 @@ class Patroller:
     def parse(self, page):
         logging.info('requesting parse of page %s', page)
         data = {'action': 'parse', 'page': page}
-        r = self.__post__(**data)
+        r = self.__mw_post__(**data)
         # print(r.json())
 
     def __get_token__(self, *args):
@@ -76,15 +76,43 @@ class Patroller:
         data = {'action': 'query', 'meta': 'tokens'}
         if len(args):
             data['type'] = '|'.join(list(map(lambda x: x.value, args)))
-        r = self.__get__(**data)
+        r = self.__mw_get__(**data)
         # print(r.json())
 
-    def __post__(self, **kwargs):
+    def __mw_post__(self, **kwargs):
+        """Wraps a request.post call, with a basic configuration.
+
+        In particular, json format is used for output.
+        Any call is authenticated with OAuth1 protocol.
+
+            >>> args = {'action': 'query', ...}
+            >>> self.__mw_post__(args) # do oauth, use json...
+
+        Args:
+            **kwargs: dictionary of parameters for the POST call.
+
+        Returns:
+            a Response object.
+        """
         args = {'format': 'json'}
         kwargs.update(args)
         return requests.post(url=self._endpoint, data=kwargs, auth=self._auth)
 
-    def __get__(self, **kwargs):
+    def __mw_get__(self, **kwargs):
+        """Wraps a request.get call, with a basic configuration.
+
+        In particular, json format is used for output.
+        Any call is authenticated with OAuth1 protocol.
+
+            >>> args = {'action': 'query', ...}
+            >>> self.__mw_get__(args) # do oauth, use json...
+
+        Args:
+            **kwargs: dictionary of parameters for the GET call.
+
+        Returns:
+            a Response object.
+        """
         args = {'format': 'json'}
         kwargs.update(args)
         return requests.get(url=self._endpoint, params=kwargs, auth=self._auth)
