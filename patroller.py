@@ -3,6 +3,9 @@ import os
 import requests
 from requests_oauthlib import OAuth1
 
+from page import Page
+from revision import Revision
+
 
 class Patroller:
 
@@ -50,6 +53,24 @@ class Patroller:
         data = {'action': 'parse', 'page': page}
         r = self.__mw_post__(**data)
         # print(r.json())
+
+    def edit(self, page, text, summary):
+        pass
+
+    def undo(self, page, revision):
+        pass
+
+    def get_last_revisions(self, title, limit=5):
+        data = {'action': 'query', "prop": "revisions",
+                "titles": title,
+                "rvprop": "user|comment|ids",
+                "rvslots": "main",
+                'rvlimit': limit,
+                "formatversion": "2"}
+        r = self.__mw_get__(**data)
+        pages = r.json()['query']['pages'][0]
+        page = Page(**pages)
+        return page.revisions
 
     def __get_token__(self, *args):
         """Get tokens required by data-modifying actions.
@@ -116,3 +137,6 @@ class Patroller:
         args = {'format': 'json'}
         kwargs.update(args)
         return requests.get(url=self._endpoint, params=kwargs, auth=self._auth)
+
+    def restore(self, revision):
+        print('restore rev id', revision.id, 'for page', revision.page_id)
