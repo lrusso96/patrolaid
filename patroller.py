@@ -4,10 +4,14 @@ import requests
 from requests_oauthlib import OAuth1
 
 from page import Page
-from revision import Revision
+from tokens import Token
+from templates import Template
 
 
 class Patroller:
+    """Models a it.wikipedia patroller. Needs consumer and access tokens to work properly.
+
+    """
 
     def __init__(self):
         consumer_token = os.environ['CONSUMER_TOKEN']
@@ -17,6 +21,7 @@ class Patroller:
         logging.info('initializing OAuth1...')
         self._auth = OAuth1(consumer_token, consumer_secret, access_token, access_secret)
         self._endpoint = 'https://it.wikipedia.org/w/api.php'
+        self.tokens = {}
 
     def authenticate(self):
         """Authenticate current patroller.
@@ -49,18 +54,37 @@ class Patroller:
         return error is None
 
     def parse(self, page):
-        logging.info('requesting parse of page %s', page)
-        data = {'action': 'parse', 'page': page}
-        r = self.__mw_post__(**data)
+        # logging.info('requesting parse of page %s', page)
+        # data = {'action': 'parse', 'page': page}
+        # r = self.__mw_post__(**data)
         # print(r.json())
-
-    def edit(self, page, text, summary):
         pass
 
-    def undo(self, page, revision):
+    def edit(self, page, text, summary):
+        # TODO wrap edit calls, like restore, warn_user, etc
+        # TODO handle errors here too.
         pass
 
     def get_last_revisions(self, title, limit=5):
+        """Retrieves last revisions (at most 'limit') of a page, given its title.
+
+        Examples:
+            >>> pt = Patroller()
+            >>> revs = pt.get_last_revisions('Main page', limit=20)
+            >>> page = revs[0].page # retrieve corresponding page object
+            >>> for rev in revs:
+            >>>     # do stuff...
+
+        Args:
+            title: the title of page
+            limit: max number of revisions to load. Default value is 5.
+
+        Returns:
+            the list of revisions.
+
+        Raises:
+
+        """
         data = {'action': 'query', "prop": "revisions",
                 "titles": title,
                 "rvprop": "user|comment|ids",
@@ -72,33 +96,38 @@ class Patroller:
         page = Page(**pages)
         return page.revisions
 
-    def __get_token__(self, *args):
+    def __get_token__(self, *tokens):
         """Get tokens required by data-modifying actions.
 
         For each action, you need a specific type of token. For example: if you want to login to a wiki site via the
         Action API, you would need a token of type “login” to proceed.
 
-            >>> from tokens import Token
-            >>> self.__get_token__(Token.LOGIN)
+        NOTE: does not (yet) handle cache!
 
-        It is possible to request more than one token, for example:
+            >>> self.__get_token__(Token.LOGIN)
+            >>> Token.LOGIN.value in self.tokens
+            >>> True
+
+        It is also possible to request more than one token, for example:
 
             >>> self.__get_token__(Token.LOGIN, Token.CREATE_ACCOUNT, ...)
 
         Args:
-            *args: list of tokens of type Token. The default value is 'csrf'
+            *tokens: list of tokens of type Token. The default value is 'csrf'
 
         Returns:
-            the token(s) requested
+            None. The tokens are stored in self.tokens.
 
         Raises:
 
         """
         data = {'action': 'query', 'meta': 'tokens'}
-        if len(args):
-            data['type'] = '|'.join(list(map(lambda x: x.value, args)))
+        if len(tokens):
+            data['type'] = '|'.join(list(map(lambda x: x.value, tokens)))
         r = self.__mw_get__(**data)
-        # print(r.json())
+        ret = r.json()['query']['tokens']
+        for token in ret:
+            self.tokens[token.replace('token', '')] = ret[token]
 
     def __mw_post__(self, **kwargs):
         """Wraps a request.post call, with a basic configuration.
@@ -138,5 +167,63 @@ class Patroller:
         kwargs.update(args)
         return requests.get(url=self._endpoint, params=kwargs, auth=self._auth)
 
-    def restore(self, revision):
-        print('restore rev id', revision.id, 'for page', revision.page_id)
+    def restore(self, revision, summary='rb'):
+        """Restores a revision.
+        NOTE: does not (yet) handle errors!
+
+        Example:
+
+
+        Args:
+            revision: the one to be restored
+            summary: the description of the restore action. Default is 'rb'.
+
+        Returns:
+
+        Raises:
+
+        """
+        if Token.CSRF.value not in self.tokens:
+            self.__get_token__(Token.CSRF)
+        token = self.tokens[Token.CSRF.value]
+        summary = '[[Utente:Italaid/patrolaid|patrolaid 0.1]]: ' + summary
+        data = {'action': 'edit', 'pageid': revision.page.id, 'summary': summary, 'undo': revision.page.last_rev_id,
+                'undoafter': revision.id, 'token': token}
+        r = self.__mw_post__(**data).json()
+        # just to debug
+        if r['edit']['result'].lower() == "success":
+            print('restore rev id', revision.id, 'for page', revision.page.id)
+        else:
+            print("error...", r)
+
+    def warn_user(self, page, user, template=Template.VANDAL, summary='avviso'):
+        """Puts a warning template on talk page of user.
+        NOTE: does not (yet) handle errors!
+
+        Example:
+
+
+        Args:
+            page: which page the user has 'improperly' modified.
+            user: who has to made the improper edit(s).
+            template: a Template type, to be used depending on the kind of edit.
+            summary: the description of this edit. Default is 'avviso'.
+
+        Returns:
+
+        Raises:
+
+        """
+        if Token.CSRF.value not in self.tokens:
+            self.__get_token__(Token.CSRF)
+        token = self.tokens[Token.CSRF.value]
+        text = template.generate(page)
+        summary = '[[Utente:Italaid/patrolaid|patrolaid 0.1]]: ' + summary
+        data = {'action': 'edit', 'title': 'Discussioni utente:' + user, 'summary': summary,
+                'section': 'new', 'sectiontitle': 'Avviso', 'text': text, 'token': token}
+        r = self.__mw_post__(**data).json()
+        # just to debug
+        if r['edit']['result'].lower() == "success":
+            print('ok')
+        else:
+            print("error...", r)

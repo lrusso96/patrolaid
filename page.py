@@ -3,7 +3,7 @@ from revision import Revision
 
 class Page:
     def __init__(self, **data):
-        self.page_id = data['pageid']
+        self.id = data['pageid']
         self.ns = data['ns']
         self.title = data['title']
         self.revisions = [Revision(self, **rev) for rev in data['revisions']]
