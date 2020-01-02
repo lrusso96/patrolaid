@@ -1,5 +1,5 @@
 # Editor
-.idea/
+.vscode/
 
 # App tokens and main
 *.env
@@ -7,5 +7,3 @@ main.py
 
 # Byte-compiled / dependencies / ...
 __pycache__/
-.Python
-venv/

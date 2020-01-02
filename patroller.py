@@ -2,6 +2,7 @@ import logging
 import os
 import requests
 from requests_oauthlib import OAuth1
+from dotenv import load_dotenv
 
 from page import Page
 from tokens import Token
@@ -14,13 +15,16 @@ class Patroller:
     """
 
     def __init__(self):
-        consumer_token = os.environ['CONSUMER_TOKEN']
+        load_dotenv()
+        consumer_token = os.getenv('CONSUMER_TOKEN')
         consumer_secret = os.environ['CONSUMER_SECRET']
         access_token = os.environ['ACCESS_TOKEN']
         access_secret = os.environ['ACCESS_SECRET']
         logging.info('initializing OAuth1...')
-        self._auth = OAuth1(consumer_token, consumer_secret, access_token, access_secret)
+        self._auth = OAuth1(consumer_token, consumer_secret,
+                            access_token, access_secret)
         self._endpoint = 'https://it.wikipedia.org/w/api.php'
+        self.redirect_wl = os.environ['REDIRECT_WL']
         self.tokens = {}
 
     def authenticate(self):
@@ -50,7 +54,8 @@ class Patroller:
         r = self.__mw_post__(**data)
         error = r.json().get('error')
         if error:
-            logging.error('%s: %s\n%s', error.get('code'), error.get('info'), error.get('*'))
+            logging.error('%s: %s\n%s', error.get('code'),
+                          error.get('info'), error.get('*'))
         return error is None
 
     def parse(self, page):
@@ -186,7 +191,7 @@ class Patroller:
         if Token.CSRF.value not in self.tokens:
             self.__get_token__(Token.CSRF)
         token = self.tokens[Token.CSRF.value]
-        summary = '[[Utente:Italaid/patrolaid|patrolaid 0.1]]: ' + summary
+        summary = f"{self.redirect_wl}:  {summary}"
         data = {'action': 'edit', 'pageid': revision.page.id, 'summary': summary, 'undo': revision.page.last_rev_id,
                 'undoafter': revision.id, 'token': token}
         r = self.__mw_post__(**data).json()
@@ -218,8 +223,8 @@ class Patroller:
             self.__get_token__(Token.CSRF)
         token = self.tokens[Token.CSRF.value]
         text = template.generate(page)
-        summary = '[[Utente:Italaid/patrolaid|patrolaid 0.1]]: ' + summary
-        data = {'action': 'edit', 'title': 'Discussioni utente:' + user, 'summary': summary,
+        summary = f"{self.redirect_wl}: {summary}"
+        data = {'action': 'edit', 'title': f"Discussioni utente: {user}", 'summary': summary,
                 'section': 'new', 'sectiontitle': 'Avviso', 'text': text, 'token': token}
         r = self.__mw_post__(**data).json()
         # just to debug
